@@ -21,25 +21,12 @@ def tp_fp_fn_tn_sklearn(gt: np.ndarray, pred: np.ndarray) -> Tuple[int, ...]:
 
 @timed(use_seconds=True, show_args=True)
 def tp_fp_fn_tn_numpy(gt: np.ndarray, pred: np.ndarray) -> Tuple[int, ...]:
-    # cf = np.column_stack((gt, pred))
-    # tp = fp = fn = tn = 0
-    # for e in cf:
-    #     if e[0] == e[1]:
-    #         if e[0] == 0:
-    #             tn += 1
-    #         else:
-    #             tp += 1
-    #     else:
-    #         if e[0] == 0:
-    #             fp += 1
-    #         else:
-    #             fn += 1
-    an = np.sum(1 for v in gt if v == 0)
-    ap = len(gt) - an
-    tn = np.sum(1 for v1, v2 in zip (gt, pred) if v1 == v2 and v1 == 0)
-    tp = np.sum(1 for v1, v2 in zip (gt, pred) if v1 == v2 and v1 == 1)
-    fn = ap - tp
-    fp = an - tn
+    gt = gt.astype(bool)
+    pred = pred.astype(bool)
+    tp = np.sum(gt & pred)
+    tn = np.sum(~gt & ~pred)
+    fp = np.sum(~gt & pred)
+    fn = np.sum(gt & ~pred)
     return tp, fp, fn, tn
 
 assert tp_fp_fn_tn_sklearn(actual, predicted) == tp_fp_fn_tn_numpy(actual, predicted)
