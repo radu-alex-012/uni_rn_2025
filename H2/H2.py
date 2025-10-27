@@ -1,7 +1,6 @@
 import pickle
 import pandas as pd
 import numpy as np
-from multiprocessing import Pool
 
 
 def softmax(z):
@@ -80,8 +79,7 @@ def slp_classifier(
             for i in range(0, no_of_samples, batch_size)
         ]
         # Compute gradients in parallel
-        with Pool(processes=no_of_processes) as pool:
-            gradients = pool.map(compute_gradients, batches)
+        gradients = [compute_gradients(batch) for batch in batches]
         # Aggregate gradients
         delta_weights = (
             np.mean([gradient[0] for gradient in gradients], axis=0) + alpha * weights
@@ -110,47 +108,47 @@ def slp_classifier(
     return weights, biases
 
 
-if __name__ == "__main__":
-    training_file = "extended_mnist_train.pkl"
-    test_file = "extended_mnist_test.pkl"
-    with open(training_file, "rb") as fp:
-        training = pickle.load(fp)
-    with open(test_file, "rb") as fp:
-        test = pickle.load(fp)
-    training_data = []
-    training_labels = []
-    for image, label in training:
-        training_data.append(image.flatten())
-        training_labels.append(label)
-    training_data = np.array(training_data) / 255.0
-    test_data = []
-    test_labels = []
-    for image, label in test:
-        test_data.append(image.flatten())
-        test_labels.append(label)
-    test_data = np.array(test_data) / 255.0
-    weights, biases = slp_classifier(
-        X=training_data,
-        y=training_labels,
-        epochs=100,
-        initial_learning_rate=0.45,
-        batch_size=64,
-        no_of_processes=6,
-        momentum=0.92,
-        warmup_epochs=8,
-        decay_rate=0.995,
-        alpha=1e-4,
-        X_test=test_data,
-        y_test=test_labels,
-    )
-    probabilities = softmax(test_data @ weights + biases)
-    predictions = np.argmax(probabilities, axis=1)
-    predictions_csv = {
-        "ID": [],
-        "target": [],
-    }
-    for i, label in enumerate(predictions):
-        predictions_csv["ID"].append(i)
-        predictions_csv["target"].append(label)
-    df = pd.DataFrame(predictions_csv)
-    df.to_csv("submission.csv", index=False)
+training_file = "extended_mnist_train.pkl"
+test_file = "extended_mnist_test.pkl"
+with open(training_file, "rb") as fp:
+    training = pickle.load(fp)
+with open(test_file, "rb") as fp:
+    test = pickle.load(fp)
+training_data = []
+training_labels = []
+for image, label in training:
+    training_data.append(image.flatten())
+    training_labels.append(label)
+test_data = []
+test_labels = []
+for image, label in test:
+    test_data.append(image.flatten())
+    test_labels.append(label)
+# Normalize input data to avoid overflow/underflow or NaNs
+training_data = np.array(training_data) / 255.0
+test_data = np.array(test_data) / 255.0
+weights, biases = slp_classifier(
+    X=training_data,
+    y=training_labels,
+    epochs=100,
+    initial_learning_rate=0.45,
+    batch_size=64,
+    no_of_processes=6,
+    momentum=0.92,
+    warmup_epochs=5,
+    decay_rate=0.995,
+    alpha=1e-4,
+    X_test=test_data,
+    y_test=test_labels,
+)
+probabilities = softmax(test_data @ weights + biases)
+predictions = np.argmax(probabilities, axis=1)
+predictions_csv = {
+    "ID": [],
+    "target": [],
+}
+for i, label in enumerate(predictions):
+    predictions_csv["ID"].append(i)
+    predictions_csv["target"].append(label)
+df = pd.DataFrame(predictions_csv)
+df.to_csv("submission.csv", index=False)
