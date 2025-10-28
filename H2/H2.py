@@ -1,6 +1,7 @@
 import pickle
 import pandas as pd
 import numpy as np
+from math import pi, cos
 
 
 def softmax(z):
@@ -8,8 +9,7 @@ def softmax(z):
     return exp_scores / np.sum(exp_scores, axis=1, keepdims=True)
 
 
-def compute_gradients(args):
-    X_batch, y_batch, weights, biases = args
+def compute_gradients(X_batch, y_batch, weights, biases):
     logits = X_batch @ weights + biases
     probabilities = softmax(logits)
     delta_logits = (
@@ -39,13 +39,6 @@ def slp_classifier(
     y_onehot = np.zeros((no_of_samples, no_of_classes))
     for i, label in enumerate(y):
         y_onehot[i, label] = 1
-    # Zero-center and normalize training data
-    X_mean = X.mean(axis=0)
-    X_std = X.std(axis=0) + 1e-8  # to avoid division by zero
-    X = (X - X_mean) / X_std
-    # Zero-center and normalize test data without peeking at it
-    if X_test is not None:
-        X_test = (X_test - X_mean) / X_std
     # Xavier initialization
     weights = np.random.randn(input_size, no_of_classes) * np.sqrt(1 / input_size)
     biases = np.zeros((1, no_of_classes))
@@ -78,7 +71,7 @@ def slp_classifier(
             for i in range(0, no_of_samples, batch_size)
         ]
         # Compute gradients in parallel
-        gradients = [compute_gradients(batch) for batch in batches]
+        gradients = [compute_gradients(*batch) for batch in batches]
         # Aggregate gradients
         delta_weights = (
             np.mean([gradient[0] for gradient in gradients], axis=0) + alpha * weights
@@ -100,9 +93,9 @@ def slp_classifier(
             loss += (alpha / 2) * np.sum(weights**2)
             training_accuracy = np.mean(np.argmax(training_probabilities, axis=1) == y)
             test_probabilities = softmax(X_test @ weights + biases)
-            acc_test = np.mean(np.argmax(test_probabilities, axis=1) == y_test)
+            test_accuracy = np.mean(np.argmax(test_probabilities, axis=1) == y_test)
             print(
-                f"Epoch {epoch+1}/{epochs}: loss = {loss:.4f}, training accuracy = {training_accuracy*100:.2f}%, test accuracy = {acc_test*100:.2f}%, learning rate = {learning_rate:.5f}"
+                f"Epoch {epoch+1}/{epochs}: loss = {loss:.4f}, training accuracy = {training_accuracy*100:.2f}%, test accuracy = {test_accuracy*100:.2f}%, learning rate = {learning_rate:.5f}"
             )
     return weights, biases
 
@@ -123,9 +116,15 @@ test_labels = []
 for image, label in test:
     test_data.append(image.flatten())
     test_labels.append(label)
-# Normalize input data to avoid overflow/underflow or NaNs
-training_data = np.array(training_data) / 255.0
-test_data = np.array(test_data) / 255.0
+training_data = np.array(training_data)
+test_data = np.array(test_data)
+# Zero-center and normalize training and test data
+training_mean = training_data.mean(axis=0)
+training_std = training_data.std(axis=0) + 1e-8  # to avoid division by zero
+training_data = (training_data - training_mean) / training_std
+test_data = (
+    test_data - training_mean
+) / training_std  # you can't peek test data, so reuse training data mean
 weights, biases = slp_classifier(
     X=training_data,
     y=training_labels,
@@ -133,7 +132,7 @@ weights, biases = slp_classifier(
     initial_learning_rate=0.45,
     batch_size=64,
     momentum=0.92,
-    warmup_epochs=5,
+    warmup_epochs=8,
     decay_rate=0.995,
     alpha=1e-4,
     X_test=test_data,
