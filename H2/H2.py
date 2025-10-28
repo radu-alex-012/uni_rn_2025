@@ -1,7 +1,6 @@
 import pickle
 import pandas as pd
 import numpy as np
-from math import pi, cos
 
 
 def softmax(z):
@@ -70,12 +69,12 @@ def slp_classifier(
             )
             for i in range(0, no_of_samples, batch_size)
         ]
-        # Compute gradients in parallel
+        # Compute gradients
         gradients = [compute_gradients(*batch) for batch in batches]
         # Aggregate gradients
         delta_weights = (
             np.mean([gradient[0] for gradient in gradients], axis=0) + alpha * weights
-        )  # L2 regularization or weight decay - prevents overfitting
+        )  # L2 regularization or weight decay - prevents overfitting by penalizing large weights
         delta_biases = np.mean([gradient[1] for gradient in gradients], axis=0)
         # Apply stochastic gradient descent with momentum
         weights_velocities = (
